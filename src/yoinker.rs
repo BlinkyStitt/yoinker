@@ -17,14 +17,14 @@ use crate::Config;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
-    /// TODO: this is "yoinkedAt" in the json. do we need to tell serde that?
-    yoinked_at: u64,
-    holder_id: String,
+    // yoinked_at: u64,
+    // holder_id: String,
     holder_name: String,
-    holder_platform: String,
+    // holder_platform: String,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Stats {
     flag: StatsFlag,
     // yoinks: u64,
