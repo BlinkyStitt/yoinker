@@ -1,0 +1,20 @@
+[package]
+name = "yoinker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.86"
+bimap = { version = "0.6.3", features = ["serde"] }
+dotenvy = "0.15.7"
+envy = "0.4.2"
+futures = "0.3.30"
+reqwest = { version = "0.12.5", features = ["json"] }
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = "1.0.120"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-util = "0.7.11"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
