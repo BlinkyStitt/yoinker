@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
-bimap = { version = "0.6.3", features = ["serde"] }
 dotenvy = "0.15.7"
 envy = "0.4.2"
 futures = "0.3.30"

@@ -5,7 +5,7 @@ use futures::pin_mut;
 use reqwest::Client;
 use serde::Deserialize;
 use std::{env, time::Duration};
-use tokio::select;
+use tokio::{select, time::sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
@@ -111,4 +111,11 @@ pub fn init_logging() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn sleep_with_cancel(cancellation_token: &CancellationToken, duration: Duration) {
+    select! {
+        _ = cancellation_token.cancelled() => {},
+        _ = sleep(duration) => {}
+    };
 }

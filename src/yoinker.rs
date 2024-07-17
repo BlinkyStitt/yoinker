@@ -1,25 +1,21 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
-use bimap::BiMap;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use tokio::{
-    select,
-    time::{sleep, Duration},
-};
+use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::Config;
+use crate::{sleep_with_cancel, Config};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
     // yoinked_at: u64,
-    // holder_id: String,
-    holder_name: String,
+    holder_id: String,
+    // holder_name: String,
     // holder_platform: String,
 }
 
@@ -29,7 +25,7 @@ pub struct Stats {
     flag: StatsFlag,
     // yoinks: u64,
     // user_yoinks: HashMap<String, u64>,
-    // user_times: HashMap<String, u64>,
+    user_times: HashMap<String, u64>,
     // users: BiMap<String, String>,
 }
 
@@ -39,20 +35,13 @@ pub async fn main_loop(
     config: &Config,
 ) -> anyhow::Result<()> {
     while !cancellation_token.is_cancelled() {
-        if let Err(err) = main(&cancellation_token, &client, config).await {
+        if let Err(err) = main(&cancellation_token, client, config).await {
             warn!(?err, "yoinker main failed");
             sleep(Duration::from_secs(2)).await;
         };
     }
 
     Ok(())
-}
-
-pub async fn sleep_with_cancel(cancellation_token: &CancellationToken, duration: Duration) {
-    select! {
-        _ = cancellation_token.cancelled() => {},
-        _ = sleep(duration) => {}
-    };
 }
 
 pub async fn main(
@@ -64,7 +53,7 @@ pub async fn main(
         .await
         .context("getting current stats")?;
 
-    if stats.flag.holder_name == config.user_id {
+    if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
         debug!("we have the flag");
 
@@ -75,6 +64,28 @@ pub async fn main(
     }
 
     // TODO: if we don't have the flag, but the person who has the flag has a lower score than us, leave them alone. we don't want to be jerks
+
+    let holder_time = stats
+        .user_times
+        .get(&stats.flag.holder_id)
+        .copied()
+        .unwrap_or(0);
+    let my_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
+
+    // the stats only refresh every 30 minutes
+    // TODO: get stats from our own hub
+    let jerk_threshold = my_time.saturating_sub(30 * 60);
+
+    if holder_time < jerk_threshold {
+        // the current flag holder has a lower score than us. don't be a jerk
+        debug!(
+            holder_id = stats.flag.holder_id.as_str(),
+            "flag holder has lower score than us. not yoinking"
+        );
+        sleep_with_cancel(cancellation_token, Duration::from_secs(2)).await;
+
+        return Ok(());
+    }
 
     // we do NOT have the flag. try to yoink it
     // TODO: smarter strategy here. delay up to 5 seconds if other people are yoinking. maybe learn the fids of the other bots?
