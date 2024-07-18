@@ -77,22 +77,21 @@ pub async fn main(
     // let jerk_threshold = my_time.saturating_sub(30 * 60);
     let jerk_threshold = 6 * 3600;
     let nice_chance = 0.75;
+    let mut rng = rand::thread_rng();
 
     if holder_time < jerk_threshold {
-        // TODO: if our cooldown has been available for more than X seconds, have a percent chance to be a jerk anyway
-
         // the current flag holder has a lower score than us. don't be a jerk
         if holder_time < my_time {
-            let mut rng = rand::thread_rng();
-
             let x = rng.gen::<f32>();
-
             if x >= nice_chance {
                 debug!(
                     holder_id = stats.flag.holder_id.as_str(),
                     "flag holder has too low of a score. not yoinking"
                 );
-                sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
+
+                let x = rng.gen_range(1..3_000);
+                sleep_with_cancel(cancellation_token, Duration::from_millis(x)).await;
+
                 return Ok(());
             }
 
@@ -103,7 +102,9 @@ pub async fn main(
     // we do NOT have the flag. try to yoink it
     info!(my_time, holder_time, "preparing to yoink the flag");
 
-    // TODO: sleep a random time?
+    // TODO: is this sleep a good idea? it wastes some of our cooldown timer, but i feel like giving other bots some time to play is a good idea
+    let x = rng.gen_range(0..=3_000);
+    sleep_with_cancel(cancellation_token, Duration::from_millis(x)).await;
 
     // TODO: smarter strategy here. delay up to 5 seconds if other people are yoinking. maybe learn the fids of the other bots?
 
