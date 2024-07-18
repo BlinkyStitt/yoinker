@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
+use crate::{sleep_with_cancel, Config};
 use anyhow::Context;
+use rand::Rng;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
-
-use crate::{sleep_with_cancel, Config};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +36,7 @@ pub async fn main_loop(
     while !cancellation_token.is_cancelled() {
         if let Err(err) = main(&cancellation_token, client, config).await {
             warn!(?err, "yoinker main failed");
-            sleep(Duration::from_secs(2)).await;
+            sleep(Duration::from_secs(1)).await;
         };
     }
 
@@ -58,12 +57,13 @@ pub async fn main(
         debug!("we have the flag");
 
         // we don't have to sleep here, but i think it makes sense to. we don't want to DOS the current flag holder check. need a websocket!
-        sleep_with_cancel(cancellation_token, Duration::from_secs(2)).await;
+        sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
 
         return Ok(());
     }
 
     // TODO: if we don't have the flag, but the person who has the flag has a lower score than us, leave them alone. we don't want to be jerks
+    // TODO: move this to a "should_not_yoink" function
 
     let holder_time = stats
         .user_times
@@ -74,20 +74,37 @@ pub async fn main(
 
     // the stats only refresh every 30 minutes
     // TODO: get stats from our own hub
-    let jerk_threshold = my_time.saturating_sub(30 * 60);
+    // let jerk_threshold = my_time.saturating_sub(30 * 60);
+    let jerk_threshold = 6 * 3600;
+    let nice_chance = 0.75;
 
     if holder_time < jerk_threshold {
-        // the current flag holder has a lower score than us. don't be a jerk
-        debug!(
-            holder_id = stats.flag.holder_id.as_str(),
-            "flag holder has lower score than us. not yoinking"
-        );
-        sleep_with_cancel(cancellation_token, Duration::from_secs(2)).await;
+        // TODO: if our cooldown has been available for more than X seconds, have a percent chance to be a jerk anyway
 
-        return Ok(());
+        // the current flag holder has a lower score than us. don't be a jerk
+        if holder_time < my_time {
+            let mut rng = rand::thread_rng();
+
+            let x = rng.gen::<f32>();
+
+            if x >= nice_chance {
+                debug!(
+                    holder_id = stats.flag.holder_id.as_str(),
+                    "flag holder has too low of a score. not yoinking"
+                );
+                sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
+                return Ok(());
+            }
+
+            info!("being a jerk");
+        }
     }
 
     // we do NOT have the flag. try to yoink it
+    info!(my_time, holder_time, "preparing to yoink the flag");
+
+    // TODO: sleep a random time?
+
     // TODO: smarter strategy here. delay up to 5 seconds if other people are yoinking. maybe learn the fids of the other bots?
 
     yoink_flag(client, config).await.context("yoinking")?;
