@@ -1,7 +1,6 @@
 mod yoinker;
 
 use anyhow::Context;
-use futures::pin_mut;
 use reqwest::Client;
 use serde::Deserialize;
 use std::{env, time::Duration};
@@ -29,50 +28,45 @@ struct Config {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
+    // create all the cancellation tokens that we need to shut down the app gracefully
+    let cancellation_token = CancellationToken::new();
+
+    let main_loop_cancellation = cancellation_token.clone();
+    let ctrl_c_cancellation = cancellation_token.clone();
+    let cancellation_guard = cancellation_token.drop_guard();
+
+    // configure the app
     init_logging().context("init logging")?;
 
     let config = envy::from_env::<Config>().context("loading config")?;
 
     info!("Hello, {}! Ready to yoink their flags?!", config.user_id);
 
-    let cancellation_token = CancellationToken::new();
-
+    // create app components
     let client = https_client().await?;
 
-    // create all the cancellation tokens that we need to shut down the app gracefully
-    let main_loop_cancellation = cancellation_token.clone();
-    let cancellation_guard = cancellation_token.drop_guard();
-
-    // create the futures for the app
+    // create app futures
     let yoinker_main_loop_f = yoinker::main_loop(main_loop_cancellation, &client, &config);
 
-    // rust futures magic
-    pin_mut!(yoinker_main_loop_f);
+    // listen for ctrl+c in the background
+    let _ctrl_c_handle = tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        info!("[ctrl+c] received. shutting down");
+        ctrl_c_cancellation.cancel();
+    });
 
-    // if there is an error, we care about it above any later errors. but we do want a graceful shutdown process
-    let first_result: anyhow::Result<()> = select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("Received Ctrl-C. Shutting down.");
-            Ok(())
-        }
-        x = &mut yoinker_main_loop_f => {
-            info!("Yoinker main loop finished.");
-            x
-        }
-    };
+    // run the main app
+    // TODO: join multiple futures here? don't try join because we want them all to have time to gracefully shut down
+    yoinker_main_loop_f.await.context("yoinker main loop")?;
 
     drop(cancellation_guard);
 
-    // graceful shutdown
-    // TODO: do something with any errors here
-    yoinker_main_loop_f.await.ok();
-
-    // return an error if we got one
-    first_result?;
+    info!("exited successfully");
 
     Ok(())
 }
 
+/// create a new HTTPS-only client with our app's user agent
 pub async fn https_client() -> anyhow::Result<Client> {
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(5))
@@ -113,6 +107,8 @@ pub fn init_logging() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// this keeps us from wasting time when we want to shut down
+/// TODO: helper that sleeps a random duration?
 pub async fn sleep_with_cancel(cancellation_token: &CancellationToken, duration: Duration) {
     select! {
         _ = cancellation_token.cancelled() => {},

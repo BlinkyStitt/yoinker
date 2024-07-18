@@ -48,6 +48,8 @@ pub async fn main(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
+    let mut rng = rand::thread_rng();
+
     let stats = current_stats(client)
         .await
         .context("getting current stats")?;
@@ -57,7 +59,8 @@ pub async fn main(
         debug!("we have the flag");
 
         // we don't have to sleep here, but i think it makes sense to. we don't want to DOS the current flag holder check. need a websocket!
-        sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
+        let x = rng.gen_range(1_000..5_000);
+        sleep_with_cancel(cancellation_token, Duration::from_millis(x)).await;
 
         return Ok(());
     }
@@ -76,20 +79,19 @@ pub async fn main(
     // TODO: get stats from our own hub
     // let jerk_threshold = my_time.saturating_sub(30 * 60);
     let jerk_threshold = 6 * 3600;
-    let nice_chance = 0.75;
-    let mut rng = rand::thread_rng();
+    let nice_chance = 0.75; // TODO: dynamic nice_chance based on their time
 
     if holder_time < jerk_threshold {
         // the current flag holder has a lower score than us. don't be a jerk
         if holder_time < my_time {
             let x = rng.gen::<f32>();
-            if x >= nice_chance {
+            if x <= nice_chance {
                 debug!(
                     holder_id = stats.flag.holder_id.as_str(),
                     "flag holder has too low of a score. not yoinking"
                 );
 
-                let x = rng.gen_range(1..3_000);
+                let x = rng.gen_range(1_000..10_000);
                 sleep_with_cancel(cancellation_token, Duration::from_millis(x)).await;
 
                 return Ok(());
