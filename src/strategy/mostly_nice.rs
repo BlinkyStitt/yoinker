@@ -19,13 +19,14 @@ impl YoinkStrategy for MostlyNiceStrategy {
 
         let mut rng = nanorand::tls_rng();
 
-        // TODO: stats only update every 30 minutes! we need to get the current holder a different way!
+        // TODO: stats only update every 30 minutes!
         let holder_time = stats
             .user_times
             .get(&stats.flag.holder_id)
             .copied()
             .unwrap_or(0);
 
+        // TODO: stats only update every 30 minutes!
         let my_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
 
         // the stats only refresh every 30 minutes
@@ -57,7 +58,7 @@ impl YoinkStrategy for MostlyNiceStrategy {
         // we do NOT have the flag. try to yoink it
         let wait_ms = rng.generate_range(0..=3_000);
 
-        info!(my_time, holder_time, wait_ms, "preparing to yoink the flag");
+        info!(my_time, ?stats.flag, wait_ms, "preparing to yoink the flag");
 
         // TODO: is this sleep a good idea? it wastes some of our cooldown timer, but i feel like giving other bots some time to play is a good idea
         sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;

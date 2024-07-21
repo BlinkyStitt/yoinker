@@ -13,7 +13,7 @@ use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
     // pub yoinked_at: u64,
@@ -22,7 +22,7 @@ pub struct StatsFlag {
     // pub holder_platform: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub flag: StatsFlag,
