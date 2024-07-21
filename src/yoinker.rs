@@ -16,7 +16,7 @@ use tracing::{debug, info, warn};
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
-    pub yoinked_at: u64,
+    pub yoinked_at: String,
     pub holder_id: String,
     pub holder_name: String,
     pub holder_platform: String,
