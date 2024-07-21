@@ -70,7 +70,7 @@ pub async fn main(
     }
 
     // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
-    let active_strategy = strategy::BlueShellStrategy;
+    let active_strategy = strategy::MostlyNiceStrategy;
 
     if active_strategy
         .should_yoink(cancellation_token, config, &stats)
