@@ -56,6 +56,7 @@ pub async fn main(
         .await
         .context("getting current stats")?;
 
+    // TODO: this is wrong. stats only ipdates every 30 minuts. we need to check the frame to see the current holder!
     if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
         debug!("we have the flag");

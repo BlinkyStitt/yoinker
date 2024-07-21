@@ -19,11 +19,13 @@ impl YoinkStrategy for MostlyNiceStrategy {
 
         let mut rng = nanorand::tls_rng();
 
+        // TODO: stats only update every 30 minutes! we need to get the current holder a different way!
         let holder_time = stats
             .user_times
             .get(&stats.flag.holder_id)
             .copied()
             .unwrap_or(0);
+
         let my_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
 
         // the stats only refresh every 30 minutes
