@@ -56,7 +56,6 @@ pub async fn main(
         .await
         .context("getting current stats")?;
 
-    // TODO: this is wrong. stats only ipdates every 30 minuts. we need to check the frame to see the current holder!
     if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
         debug!("we have the flag");
@@ -84,13 +83,25 @@ pub async fn main(
 }
 
 pub async fn current_stats(client: &Client) -> anyhow::Result<Stats> {
-    let stats = client
+    // TODO: put stats in a cache. they only refresh every 30 minutes
+    let mut stats = client
         .get("https://yoink.terminally.online/api/stats")
         .send()
         .await?
         .error_for_status()?
-        .json()
+        .json::<Stats>()
         .await?;
+
+    // get the current flag holder
+    let flag = client
+        .get("https://yoink.terminally.online/api/flag")
+        .send()
+        .await?
+        .json::<StatsFlag>()
+        .await?;
+
+    // override the stats' old info with the current info
+    stats.flag = flag;
 
     Ok(stats)
 }
