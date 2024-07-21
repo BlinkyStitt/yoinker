@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{yoinker::Stats, Config};
+use crate::{sleep_with_cancel, yoinker::Stats, Config};
 
 use super::YoinkStrategy;
 
@@ -11,7 +13,7 @@ pub struct BlueShellStrategy;
 impl YoinkStrategy for BlueShellStrategy {
     async fn should_yoink(
         &self,
-        _cancellation_token: &CancellationToken,
+        cancellation_token: &CancellationToken,
         _config: &Config,
         stats: &Stats,
     ) -> anyhow::Result<bool> {
@@ -26,8 +28,13 @@ impl YoinkStrategy for BlueShellStrategy {
 
         info!(%first_place_id, %holder_id, "blue shell strategy");
 
-        // TODO: some delay here?
+        if first_place_id == holder_id {
+            // TODO: some delay here?
+            Ok(true)
+        } else {
+            sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
 
-        Ok(first_place_id == holder_id)
+            Ok(false)
+        }
     }
 }
