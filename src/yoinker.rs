@@ -77,6 +77,8 @@ pub async fn main(
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
+    } else {
+        debug!("not yoinking this time");
     }
 
     Ok(())

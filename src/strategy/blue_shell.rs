@@ -28,10 +28,10 @@ impl YoinkStrategy for BlueShellStrategy {
 
         let holder_id = &stats.flag.holder_id;
 
-        info!(%first_place_id, %holder_id, "blue shell strategy");
+        let mut rng = nanorand::tls_rng();
 
         if first_place_id == holder_id {
-            let mut rng = nanorand::tls_rng();
+            info!(%first_place_id, %holder_id, "blue shell!");
 
             let wait_ms = rng.generate_range(0..=3_000);
 
@@ -39,7 +39,11 @@ impl YoinkStrategy for BlueShellStrategy {
 
             Ok(true)
         } else {
-            sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
+            info!(%first_place_id, %holder_id, "waiting to fire the blue shell");
+
+            let wait_ms = rng.generate_range(1_000..=3_000);
+
+            sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
             Ok(false)
         }
