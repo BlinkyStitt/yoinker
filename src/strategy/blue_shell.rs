@@ -33,7 +33,7 @@ impl YoinkStrategy for BlueShellStrategy {
         if first_place_id == holder_id {
             info!(%first_place_id, %holder_id, "blue shell!");
 
-            let wait_ms = rng.generate_range(0..=3_000);
+            let wait_ms = rng.generate_range(0..=1_000);
 
             sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
@@ -41,7 +41,8 @@ impl YoinkStrategy for BlueShellStrategy {
         } else {
             info!(%first_place_id, %holder_id, "waiting to fire the blue shell");
 
-            let wait_ms = rng.generate_range(1_000..=3_000);
+            // TODO: look at the stats to see the next time that they are able to yoink. wait until then. if they don't yoink within some time after that, yoink anyways
+            let wait_ms = rng.generate_range(500..=2_000);
 
             sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
