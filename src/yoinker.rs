@@ -52,6 +52,8 @@ pub async fn main(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
+    let mut rng = nanorand::tls_rng();
+
     let stats = current_stats(client)
         .await
         .context("getting current stats")?;
@@ -59,8 +61,6 @@ pub async fn main(
     if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
         debug!("we have the flag");
-
-        let mut rng = nanorand::tls_rng();
 
         // we don't have to sleep here, but i think it makes sense to. we don't want to DOS the current flag holder check. need a websocket!
         let x = rng.generate_range(1_000..5_000);
@@ -70,7 +70,7 @@ pub async fn main(
     }
 
     // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
-    let active_strategy = strategy::MostlyNiceStrategy;
+    let active_strategy = strategy::BlueShellStrategy;
 
     if active_strategy
         .should_yoink(cancellation_token, config, &stats)

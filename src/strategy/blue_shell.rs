@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use nanorand::Rng;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -25,13 +26,17 @@ impl YoinkStrategy for BlueShellStrategy {
             .map(|(id, _)| id)
             .context("there should always be someone in first")?;
 
-        // TODO: stats only changes every 30 minutes! we need to get the current holder another way
         let holder_id = &stats.flag.holder_id;
 
         info!(%first_place_id, %holder_id, "blue shell strategy");
 
         if first_place_id == holder_id {
-            // TODO: some delay here?
+            let mut rng = nanorand::tls_rng();
+
+            let wait_ms = rng.generate_range(0..=3_000);
+
+            sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
+
             Ok(true)
         } else {
             sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
