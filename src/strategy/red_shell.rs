@@ -8,7 +8,7 @@ use crate::{sleep_with_cancel, yoinker::Stats, Config};
 
 use super::YoinkStrategy;
 
-/// target the recent top yoinker.
+/// target the recent top 3 yoinkers.
 pub struct RedShellStrategy;
 
 impl YoinkStrategy for RedShellStrategy {

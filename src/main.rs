@@ -1,3 +1,4 @@
+#[allow(async_fn_in_trait)]
 mod strategy;
 mod yoinker;
 
@@ -12,10 +13,12 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
+pub use strategy::{BlueShellStrategy, MostlyNiceStrategy, RedShellStrategy, YoinkStrategy};
+
 /// application configuration
 /// TODO: add Debug once this doesn't have secrets in it
 #[derive(Deserialize)]
-struct Config {
+pub struct Config {
     /// TODO: get this based on the signer/api key?
     user_id: String,
     cast_hash: String,
@@ -25,6 +28,7 @@ struct Config {
     nn_signer_uuid: String,
 }
 
+/// main entry point for the yoink bot.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -71,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// create a new HTTPS-only client with our app's user agent
+/// create a new HTTPS-only client with our app's user agent.
 pub async fn https_client() -> anyhow::Result<Client> {
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(5))
