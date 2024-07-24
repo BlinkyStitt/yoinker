@@ -8,9 +8,10 @@ use serde::Deserialize;
 use std::{env, time::Duration};
 use tokio::{select, time::sleep};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+/// The application name and version.
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 pub use strategy::{BlueShellStrategy, MostlyNiceStrategy, RedShellStrategy, YoinkStrategy};
@@ -28,7 +29,7 @@ pub struct Config {
     nn_signer_uuid: String,
 }
 
-/// main entry point for the yoink bot.
+/// The entry point for the yoink bot.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -55,8 +56,11 @@ async fn main() -> anyhow::Result<()> {
 
     // listen for ctrl+c in the background
     let _ctrl_c_handle = tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        info!("[ctrl+c] received. shutting down");
+        if let Err(err) = tokio::signal::ctrl_c().await {
+            error!(?err, "ctrl+c handler failed. shutting down");
+        } else {
+            info!("[ctrl+c] received. shutting down");
+        }
         ctrl_c_cancellation.cancel();
     });
 
@@ -97,6 +101,7 @@ pub fn init_logging() -> anyhow::Result<()> {
 
     let subscriber = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env());
 
+    // TODO: tokio-console
     match log_format.as_deref() {
         Some("json") => {
             let subscriber = subscriber.json().finish();

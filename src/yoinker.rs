@@ -10,8 +10,8 @@ use nanorand::Rng;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use std::fmt::Debug;
 use std::hash::Hash;
+use std::{fmt::Debug, ops::SubAssign};
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
@@ -37,6 +37,7 @@ pub struct Stats {
     pub users: HashMap<String, String>,
 }
 
+/// Rruns the yoink bot until cancelled.
 pub async fn main_loop(
     cancellation_token: CancellationToken,
     client: &Client,
@@ -68,15 +69,17 @@ pub async fn main_loop(
     Ok(())
 }
 
-fn subtract_hashmaps<K: Clone + Debug + Hash + PartialEq + Eq>(
-    newer: &HashMap<K, u64>,
-    older: &HashMap<K, u64>,
-) -> HashMap<K, u64> {
+/// helper function to subtract two hashmaps and return the diference.
+fn subtract_hashmaps<K, V>(newer: &HashMap<K, V>, older: &HashMap<K, V>) -> HashMap<K, V>
+where
+    K: Clone + Debug + Hash + PartialEq + Eq,
+    V: Copy + Clone + SubAssign + PartialOrd<u64>,
+{
     let mut result = newer.clone();
 
     for (key, older_value) in older {
         if let Some(new_value) = result.get_mut(key) {
-            *new_value -= older_value;
+            *new_value -= *older_value;
         } else {
             warn!(?key, "missing key!")
         }
@@ -87,6 +90,7 @@ fn subtract_hashmaps<K: Clone + Debug + Hash + PartialEq + Eq>(
     result
 }
 
+/// The main logic for the yoink bot.
 pub async fn main(
     cancellation_token: &CancellationToken,
     client: &Client,

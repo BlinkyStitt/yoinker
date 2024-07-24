@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
+/// Prefer to target players that are above 6 hours on the leaderboard.
 pub struct MostlyNiceStrategy;
 
 impl YoinkStrategy for MostlyNiceStrategy {
@@ -31,8 +32,6 @@ impl YoinkStrategy for MostlyNiceStrategy {
         // TODO: stats only update every 30 minutes!
         let my_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
 
-        // the stats only refresh every 30 minutes
-        // TODO: get stats from our own hub
         // let jerk_threshold = my_time.saturating_sub(30 * 60);
         let jerk_threshold = 6 * 3600;
         let nice_chance: u16 = 75; // TODO: dynamic nice_chance based on their time
