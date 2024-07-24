@@ -1,6 +1,6 @@
 use im::HashMap;
 use nanorand::Rng;
-use std::time::Duration;
+use std::{cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
@@ -26,7 +26,7 @@ impl YoinkStrategy for RedShellStrategy {
             })
             .collect::<Vec<_>>();
 
-        targets.sort_by_key(|(_, &time)| time);
+        targets.sort_by_key(|(_, &time)| Reverse(time));
 
         let targets = targets
             .iter()
