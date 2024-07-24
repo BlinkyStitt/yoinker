@@ -28,10 +28,26 @@ impl YoinkStrategy for RedShellStrategy {
 
         targets.sort_by_key(|(_, &time)| Reverse(time));
 
+        #[allow(dead_code)]
+        #[derive(Debug)]
+        struct Target<'a> {
+            id: &'a str,
+            time_diff: u64,
+            time: u64,
+        }
+
         let targets = targets
             .iter()
             .take(3)
-            .map(|(id, x)| (id.as_str(), **x, stats.user_times.get(id.as_str()).copied()))
+            .map(|(id, x)| Target {
+                id: id.as_str(),
+                time_diff: **x,
+                time: stats
+                    .user_times
+                    .get(id.as_str())
+                    .copied()
+                    .unwrap_or_default(),
+            })
             .collect::<Vec<_>>();
 
         let holder_id = &stats.flag.holder_id;
@@ -41,7 +57,7 @@ impl YoinkStrategy for RedShellStrategy {
 
         let mut rng = nanorand::tls_rng();
 
-        if targets.iter().any(|(id, _, _)| id == holder_id) {
+        if targets.iter().any(|t| t.id == holder_id) {
             info!(%holder_id, %holder_time, %our_time, ?targets, "fire!");
 
             let wait_ms = rng.generate_range(0..=1_000);
