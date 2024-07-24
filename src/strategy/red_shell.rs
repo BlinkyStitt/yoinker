@@ -30,6 +30,7 @@ impl YoinkStrategy for RedShellStrategy {
 
         let targets = targets
             .iter()
+            .take(3)
             .map(|(id, x)| (id.as_str(), **x, stats.user_times.get(id.as_str()).copied()))
             .collect::<Vec<_>>();
 

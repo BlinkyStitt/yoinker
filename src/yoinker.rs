@@ -202,13 +202,13 @@ pub async fn yoink_flag(
     #[allow(dead_code)]
     #[derive(Debug, serde::Deserialize)]
     struct Response {
-        version: String,
+        // version: String,
         title: String,
         image: Url,
-        buttons: Vec<serde_json::Value>,
-        input: serde_json::Value,
-        state: serde_json::Value,
-        frames_url: Url,
+        // buttons: Vec<serde_json::Value>,
+        // input: serde_json::Value,
+        // state: serde_json::Value,
+        // frames_url: String,
     }
 
     let response = response.json::<Response>().await?;
