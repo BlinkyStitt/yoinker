@@ -59,15 +59,21 @@ impl YoinkStrategy for RedShellStrategy {
         let mut rng = nanorand::tls_rng();
 
         if targets.iter().any(|t| t.id == holder_id) {
-            info!(%holder_id, %holder_time, %our_time, ?targets, "fire!");
+            let wait_ms = rng.generate_range(1_000..=3_000);
 
-            let wait_ms = rng.generate_range(0..=3_000);
+            info!(holder_id, holder_time, our_time, wait_ms, ?targets, "fire!");
 
             sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
             Ok(true)
         } else {
-            debug!(%holder_id, %holder_time, %our_time, ?targets, "waiting to fire the shell");
+            debug!(
+                holder_id,
+                holder_time,
+                our_time,
+                ?targets,
+                "waiting to fire the shell"
+            );
 
             // TODO: look at the stats to see the next time that they are able to yoink. wait until then. if they don't yoink within some time after that, yoink anyways
 

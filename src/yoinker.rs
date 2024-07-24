@@ -42,9 +42,10 @@ pub async fn main_loop(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
+    // stats update every 30 minutes, but we don't know where in the refresh window we are. so only cache for 5 minutes
     let stats_cache: Cache<(), Stats> = Cache::builder()
         .max_capacity(1)
-        .time_to_live(Duration::from_secs(30 * 60))
+        .time_to_live(Duration::from_secs(5 * 60))
         .build();
 
     let mut old_stats = None;
