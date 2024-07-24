@@ -14,7 +14,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -137,7 +137,7 @@ pub async fn main(
     {
         yoink_flag(cancellation_token, client, config).await?;
     } else {
-        debug!("not yoinking this time");
+        trace!("not yoinking this time");
     }
 
     Ok(())
