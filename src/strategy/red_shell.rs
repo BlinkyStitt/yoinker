@@ -36,6 +36,7 @@ impl YoinkStrategy for RedShellStrategy {
             time: u64,
         }
 
+        // TODO: only take 3 if user_times_diff is empty? take 1 otherwise?
         let targets = targets
             .iter()
             .take(3)
@@ -60,7 +61,7 @@ impl YoinkStrategy for RedShellStrategy {
         if targets.iter().any(|t| t.id == holder_id) {
             info!(%holder_id, %holder_time, %our_time, ?targets, "fire!");
 
-            let wait_ms = rng.generate_range(0..=1_000);
+            let wait_ms = rng.generate_range(0..=3_000);
 
             sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
@@ -69,9 +70,8 @@ impl YoinkStrategy for RedShellStrategy {
             debug!(%holder_id, %holder_time, %our_time, ?targets, "waiting to fire the shell");
 
             // TODO: look at the stats to see the next time that they are able to yoink. wait until then. if they don't yoink within some time after that, yoink anyways
-            let wait_ms = rng.generate_range(500..=2_000);
 
-            sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
+            sleep_with_cancel(cancellation_token, Duration::from_secs(1)).await;
 
             Ok(false)
         }
