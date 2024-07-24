@@ -227,7 +227,10 @@ pub async fn yoink_flag(
         if let Some((_, until)) = response.image.query_pairs().find(|(k, _)| k == "date") {
             let now_ms = chrono::Utc::now().timestamp_millis();
 
-            let until_ms = until.parse::<i64>().context("parsing rate limit date")?;
+            let last_yoinked_ms = until.parse::<i64>().context("parsing rate limit date")?;
+
+            // TODO: get the rate limit time from stats or similar
+            let until_ms = last_yoinked_ms + 60_000;
 
             if until_ms > now_ms {
                 let duration_ms = (until_ms - now_ms) as u64;
