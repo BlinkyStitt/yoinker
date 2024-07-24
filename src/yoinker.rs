@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 use url::Url;
 
+/// Information about the current flag holder.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
@@ -27,6 +28,7 @@ pub struct StatsFlag {
     pub holder_platform: String,
 }
 
+/// Information about the current state of the game. Updated every 30 minutes.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
@@ -148,6 +150,7 @@ pub async fn main(
     Ok(())
 }
 
+/// The current state of the game (with some caching). Parts of this only update every 30 minutes.
 pub async fn current_stats(cache: &Cache<(), Stats>, client: &Client) -> anyhow::Result<Stats> {
     let client = client.clone();
 
@@ -179,6 +182,7 @@ pub async fn current_stats(cache: &Cache<(), Stats>, client: &Client) -> anyhow:
     Ok(stats)
 }
 
+/// Use [Neynar's](https://neynar.com/) API to yoink the flag.
 pub async fn yoink_flag(
     cancellation_token: &CancellationToken,
     client: &Client,
