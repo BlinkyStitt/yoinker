@@ -4,32 +4,37 @@ use crate::{
     Config,
 };
 use anyhow::Context;
+use im::HashMap;
+use moka::future::Cache;
 use nanorand::Rng;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
+use std::fmt::Debug;
+use std::hash::Hash;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
+use url::Url;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
+    // TODO: `yoinked_at` is a String in one place but a u64 in another. need a custom deserializer
     // pub yoinked_at: String,
     pub holder_id: String,
     pub holder_name: String,
     pub holder_platform: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub flag: StatsFlag,
     // pub yoinks: u64,
     // pub user_yoinks: HashMap<String, u64>,
     pub user_times: HashMap<String, u64>,
-    // pub users: BiMap<String, String>,
+    pub users: HashMap<String, String>,
 }
 
 pub async fn main_loop(
@@ -37,8 +42,23 @@ pub async fn main_loop(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
+    let stats_cache: Cache<(), Stats> = Cache::builder()
+        .max_capacity(1)
+        .time_to_live(Duration::from_secs(30 * 60))
+        .build();
+
+    let mut old_stats = None;
+
     while !cancellation_token.is_cancelled() {
-        if let Err(err) = main(&cancellation_token, client, config).await {
+        if let Err(err) = main(
+            &cancellation_token,
+            client,
+            config,
+            &mut old_stats,
+            &stats_cache,
+        )
+        .await
+        {
             warn!(?err, "yoinker main failed");
             sleep(Duration::from_secs(1)).await;
         };
@@ -47,16 +67,55 @@ pub async fn main_loop(
     Ok(())
 }
 
+fn subtract_hashmaps<K: Clone + Debug + Hash + PartialEq + Eq>(
+    newer: &HashMap<K, u64>,
+    older: &HashMap<K, u64>,
+) -> HashMap<K, u64> {
+    let mut result = newer.clone();
+
+    for (key, older_value) in older {
+        if let Some(new_value) = result.get_mut(key) {
+            *new_value -= older_value;
+        } else {
+            warn!(?key, "missing key!")
+        }
+    }
+
+    result.retain(|_, &v| v > 0);
+
+    result
+}
+
 pub async fn main(
     cancellation_token: &CancellationToken,
     client: &Client,
     config: &Config,
+    old_stats: &mut Option<(Stats, HashMap<String, u64>)>,
+    stats_cache: &Cache<(), Stats>,
 ) -> anyhow::Result<()> {
     let mut rng = nanorand::tls_rng();
 
-    let stats = current_stats(client)
+    let stats = current_stats(stats_cache, client)
         .await
         .context("getting current stats")?;
+
+    if let Some((old_stats, new_diff)) = old_stats {
+        if old_stats.user_times != stats.user_times {
+            // the stats have changed. update the old stats
+            *new_diff = subtract_hashmaps(&stats.user_times, &old_stats.user_times);
+
+            *old_stats = stats.clone();
+
+            info!(?new_diff, "user stats changed");
+        }
+    } else {
+        // this is the first time we've gotten stats. set the old stats
+        info!("first time getting stats. targeting first place yoinker");
+
+        *old_stats = Some((stats.clone(), stats.user_times.clone()));
+    }
+
+    let user_times_diff = &old_stats.as_ref().unwrap().1;
 
     if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
@@ -70,10 +129,10 @@ pub async fn main(
     }
 
     // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
-    let active_strategy = strategy::BlueShellStrategy;
+    let active_strategy = strategy::RedShellStrategy;
 
     if active_strategy
-        .should_yoink(cancellation_token, config, &stats)
+        .should_yoink(cancellation_token, config, &stats, user_times_diff)
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
@@ -84,15 +143,22 @@ pub async fn main(
     Ok(())
 }
 
-pub async fn current_stats(client: &Client) -> anyhow::Result<Stats> {
-    // TODO: put stats in a cache. they only refresh every 30 minutes
-    let mut stats = client
-        .get("https://yoink.terminally.online/api/stats")
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<Stats>()
-        .await?;
+pub async fn current_stats(cache: &Cache<(), Stats>, client: &Client) -> anyhow::Result<Stats> {
+    let client = client.clone();
+
+    // TODO: put stats in a cache. they only refresh every 30 minutes. we set our timer to 10 minutes though just so that if things don't line up we aren't too stale
+    let mut stats = cache
+        .try_get_with(
+            (),
+            client
+                .get("https://yoink.terminally.online/api/stats")
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<Stats>(),
+        )
+        .await
+        .with_context(|| "failed fetching stats")?;
 
     // get the current flag holder
     let flag = client
@@ -133,11 +199,23 @@ pub async fn yoink_flag(
         .send()
         .await?;
 
-    let response = response.text().await?;
+    #[allow(dead_code)]
+    #[derive(Debug, serde::Deserialize)]
+    struct Response {
+        version: String,
+        title: String,
+        image: Url,
+        buttons: Vec<serde_json::Value>,
+        input: serde_json::Value,
+        state: serde_json::Value,
+        frames_url: Url,
+    }
+
+    let response = response.json::<Response>().await?;
 
     // TODO: inspect the response. the image might be <https://yoink.terminally.online/api/images/ratelimit?date=1721150535550>
 
-    info!("yoinked: {:#?}", response);
+    info!(?response, "yoinked");
 
     // we've yoinked. the current cooldown timer is 60 seconds. no point in returning before then
     sleep_with_cancel(cancellation_token, Duration::from_secs(60)).await;

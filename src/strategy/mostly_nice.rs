@@ -1,5 +1,6 @@
 use super::YoinkStrategy;
 use crate::{sleep_with_cancel, yoinker::Stats, Config};
+use im::HashMap;
 use nanorand::Rng;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -13,6 +14,7 @@ impl YoinkStrategy for MostlyNiceStrategy {
         cancellation_token: &CancellationToken,
         config: &Config,
         stats: &Stats,
+        _user_times_diff: &HashMap<String, u64>,
     ) -> anyhow::Result<bool> {
         // TODO: if we don't have the flag, but the person who has the flag has a lower score than us, leave them alone. we don't want to be jerks
         // TODO: move this to a "should_not_yoink" function

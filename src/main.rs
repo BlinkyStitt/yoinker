@@ -58,9 +58,13 @@ async fn main() -> anyhow::Result<()> {
 
     // run the main app
     // TODO: join multiple futures here? don't try join because we want them all to have time to gracefully shut down
-    yoinker_main_loop_f.await.context("yoinker main loop")?;
+    let exit = yoinker_main_loop_f.await.context("yoinker main loop");
 
     drop(cancellation_guard);
+
+    // TODO: wait for shutdown? we don't have any async cleanup to do
+
+    exit?;
 
     info!("exited successfully");
 
@@ -71,8 +75,10 @@ async fn main() -> anyhow::Result<()> {
 pub async fn https_client() -> anyhow::Result<Client> {
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(5))
-        .user_agent(APP_USER_AGENT)
+        .http2_keep_alive_interval(Duration::from_secs(50))
+        .http2_keep_alive_timeout(Duration::from_secs(60))
         .https_only(true)
+        .user_agent(APP_USER_AGENT)
         .build()
         .context("http client error")?;
 
