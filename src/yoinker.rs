@@ -236,7 +236,11 @@ pub async fn yoink_flag(
 
                 Duration::from_millis(duration_ms)
             } else {
-                anyhow::bail!("rate limit date is in the past");
+                anyhow::bail!(
+                    "rate limit date is in the past. {} should be > {}",
+                    until_ms,
+                    now_ms
+                );
             }
         } else {
             warn!(?response, "failed to read rate limit query data");
