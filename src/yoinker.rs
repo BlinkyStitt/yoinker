@@ -222,12 +222,35 @@ pub async fn yoink_flag(
 
     let response = response.json::<Response>().await?;
 
-    // TODO: inspect the response. the image might be <https://yoink.terminally.online/api/images/ratelimit?date=1721150535550>
+    // inspect the response. the image might be <https://yoink.terminally.online/api/images/ratelimit?date=1721150535550>
+    let duration = if response.image.path() == "/api/images/ratelimit" {
+        if let Some((_, until)) = response.image.query_pairs().find(|(k, _)| k == "date") {
+            let now_ms = chrono::Utc::now().timestamp_millis();
 
-    info!(?response, "yoinked");
+            let until_ms = until.parse::<i64>().context("parsing rate limit date")?;
 
-    // we've yoinked. the current cooldown timer is 60 seconds. no point in returning before then
-    sleep_with_cancel(cancellation_token, Duration::from_secs(60)).await;
+            if until_ms > now_ms {
+                let duration_ms = (until_ms - now_ms) as u64;
+
+                warn!(duration_ms, "we've been rate limited");
+
+                Duration::from_millis(duration_ms)
+            } else {
+                anyhow::bail!("rate limit date is in the past");
+            }
+        } else {
+            warn!(?response, "failed to read rate limit query data");
+            Duration::from_secs(60)
+        }
+    } else {
+        // we've yoinked. the current cooldown timer is 60 seconds. no point in returning before then
+        info!(?response, "yoinked!");
+
+        // TODO: this might change! we should get this from stats or something like that. maybe just wait 1 second and then let a rate limit on the next run give us the exact timing
+        Duration::from_secs(60)
+    };
+
+    sleep_with_cancel(cancellation_token, duration).await;
 
     Ok(())
 }
