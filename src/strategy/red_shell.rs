@@ -52,7 +52,9 @@ impl YoinkStrategy for RedShellStrategy {
             .collect::<Vec<_>>();
 
         let holder_id = &stats.flag.holder_id;
+
         let holder_time = stats.user_times.get(holder_id).copied().unwrap_or(0);
+        let holder_diff = user_times_diff.get(holder_id).copied().unwrap_or(0);
 
         let our_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
 
@@ -61,7 +63,15 @@ impl YoinkStrategy for RedShellStrategy {
         if targets.iter().any(|t| t.id == holder_id) {
             let wait_ms = rng.generate_range(1_000..=3_000);
 
-            info!(holder_id, holder_time, our_time, wait_ms, ?targets, "fire!");
+            info!(
+                holder_id,
+                holder_diff,
+                holder_time,
+                our_time,
+                wait_ms,
+                ?targets,
+                "fire!"
+            );
 
             sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
 
@@ -69,6 +79,7 @@ impl YoinkStrategy for RedShellStrategy {
         } else {
             debug!(
                 holder_id,
+                holder_diff,
                 holder_time,
                 our_time,
                 ?targets,
