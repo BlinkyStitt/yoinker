@@ -57,6 +57,7 @@ impl YoinkStrategy for RedShellStrategy {
         let holder_diff = user_times_diff.get(holder_id).copied().unwrap_or(0);
 
         let our_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
+        let our_diff = user_times_diff.get(&config.user_id).copied().unwrap_or(0);
 
         let mut rng = nanorand::tls_rng();
 
@@ -67,6 +68,7 @@ impl YoinkStrategy for RedShellStrategy {
                 holder_id,
                 holder_diff,
                 holder_time,
+                our_diff,
                 our_time,
                 wait_ms,
                 ?targets,
@@ -81,6 +83,7 @@ impl YoinkStrategy for RedShellStrategy {
                 holder_id,
                 holder_diff,
                 holder_time,
+                our_diff,
                 our_time,
                 ?targets,
                 "waiting to fire the shell"
