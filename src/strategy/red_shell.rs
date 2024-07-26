@@ -1,6 +1,7 @@
+use anyhow::Context;
 use im::HashMap;
 use nanorand::Rng;
-use std::{cmp::Reverse, time::Duration};
+use std::{any, cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
@@ -28,6 +29,19 @@ impl YoinkStrategy for RedShellStrategy {
 
         targets.sort_by_key(|(_, &time)| Reverse(time));
 
+        let num_targets = if let Some((_first_id, first_time)) = targets.first() {
+            if **first_time > 30 * 60 {
+                // the first place time is larger than 30 minutes. this means that we haven't yet seen enough time to pass to calculate a diff
+                // target the top 3 players
+                // TODO: this feels fragile. maybe better to have user_times_diff be empty on first run?
+                3
+            } else {
+                // we have actual diffs. target the top moving player
+                1
+            }
+        } else {
+            anyhow::bail!("there should always be someone in first");
+        };
         #[allow(dead_code)]
         #[derive(Debug)]
         struct Target<'a> {
@@ -39,7 +53,7 @@ impl YoinkStrategy for RedShellStrategy {
         // TODO: only take 3 if user_times_diff is empty? take 1 otherwise?
         let targets = targets
             .iter()
-            .take(3)
+            .take(num_targets)
             .map(|(id, x)| Target {
                 id: id.as_str(),
                 time_diff: **x,

@@ -117,7 +117,7 @@ pub async fn main(
         }
     } else {
         // this is the first time we've gotten stats. set the old stats
-        info!("first time getting stats. targeting top 3 yoinkers");
+        info!("first time getting stats");
 
         *old_stats = Some((stats.clone(), stats.user_times.clone()));
     }
