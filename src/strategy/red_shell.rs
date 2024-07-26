@@ -51,7 +51,6 @@ impl YoinkStrategy for RedShellStrategy {
             time: u64,
         }
 
-        // TODO: only take 3 if user_times_diff is empty? take 1 otherwise?
         let targets = targets
             .iter()
             .take(num_targets)

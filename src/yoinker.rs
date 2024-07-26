@@ -146,18 +146,21 @@ pub async fn main(
 
     // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
     if Instant::now() > *impatient_fire {
+        warn!("its been too long! I must yoink!");
         yoink_flag(cancellation_token, client, config).await?;
 
-        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
+        // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
 
-        warn!("its been too long! I must yoink!");
+        *impatient_fire = Instant::now() + COOLDOWN_TIME;
     } else if active_strategy
         .should_yoink(cancellation_token, config, &stats, user_times_diff)
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
 
-        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
+        // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
+
+        *impatient_fire = Instant::now() + COOLDOWN_TIME;
     } else {
         // TODO: include next_fire in a human readable format
         trace!("not yoinking this time");
