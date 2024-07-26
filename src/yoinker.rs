@@ -17,6 +17,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 use url::Url;
 
+/// TODO: this might change! we should get this from stats or something like that. maybe just wait 1 second and then let a rate limit on the next run give us the exact timing
+const COOLDOWN_TIME: Duration = Duration::from_secs(10 * 60);
+
 /// Information about the current flag holder.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -52,14 +55,14 @@ pub async fn main_loop(
         .build();
 
     let mut old_stats = None;
-    let mut next_fire = Instant::now() + Duration::from_secs(60);
+    let mut impatient_fire = Instant::now() + COOLDOWN_TIME / 2;
 
     while !cancellation_token.is_cancelled() {
         if let Err(err) = main(
             &cancellation_token,
             client,
             config,
-            &mut next_fire,
+            &mut impatient_fire,
             &mut old_stats,
             &stats_cache,
         )
@@ -99,7 +102,7 @@ pub async fn main(
     cancellation_token: &CancellationToken,
     client: &Client,
     config: &Config,
-    next_fire: &mut Instant,
+    impatient_fire: &mut Instant,
     old_stats: &mut Option<(Stats, HashMap<String, u64>)>,
     stats_cache: &Cache<(), Stats>,
 ) -> anyhow::Result<()> {
@@ -141,20 +144,22 @@ pub async fn main(
     // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
     let active_strategy = strategy::RedShellStrategy;
 
+    // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
     if active_strategy
         .should_yoink(cancellation_token, config, &stats, user_times_diff)
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
 
-        *next_fire = Instant::now() + Duration::from_secs(120);
-    } else if Instant::now() > *next_fire {
+        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
+    } else if Instant::now() > *impatient_fire {
         yoink_flag(cancellation_token, client, config).await?;
 
-        *next_fire = Instant::now() + Duration::from_secs(120);
+        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
 
         warn!("its been too long! I must yoink!");
     } else {
+        // TODO: include next_fire in a human readable format
         trace!("not yoinking this time");
     }
 
@@ -241,7 +246,7 @@ pub async fn yoink_flag(
             let last_yoinked_ms = until.parse::<i64>().context("parsing rate limit date")?;
 
             // TODO: get the rate limit time from stats or similar
-            let until_ms = last_yoinked_ms + 60_000;
+            let until_ms = last_yoinked_ms + COOLDOWN_TIME.as_millis() as i64;
 
             if until_ms > now_ms {
                 let duration_ms = (until_ms - now_ms) as u64;
@@ -258,14 +263,13 @@ pub async fn yoink_flag(
             }
         } else {
             warn!(?response, "failed to read rate limit query data");
-            Duration::from_secs(60)
+            COOLDOWN_TIME
         }
     } else {
         // we've yoinked. the current cooldown timer is 60 seconds. no point in returning before then
         info!(?response, "yoinked!");
 
-        // TODO: this might change! we should get this from stats or something like that. maybe just wait 1 second and then let a rate limit on the next run give us the exact timing
-        Duration::from_secs(60)
+        COOLDOWN_TIME
     };
 
     sleep_with_cancel(cancellation_token, duration).await;
