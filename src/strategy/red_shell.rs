@@ -19,6 +19,8 @@ impl YoinkStrategy for RedShellStrategy {
         stats: &Stats,
         user_times_diff: &HashMap<String, u64>,
     ) -> anyhow::Result<bool> {
+        // TODO: if we haven't yoinked in 2 minutes, yoink
+
         let mut targets = user_times_diff
             .iter()
             .filter(|(id, _)| {

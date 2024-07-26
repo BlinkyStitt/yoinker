@@ -10,8 +10,8 @@ use nanorand::Rng;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use std::hash::Hash;
 use std::{fmt::Debug, ops::SubAssign};
+use std::{hash::Hash, time::Instant};
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
@@ -52,12 +52,14 @@ pub async fn main_loop(
         .build();
 
     let mut old_stats = None;
+    let mut next_fire = Instant::now() + Duration::from_secs(60);
 
     while !cancellation_token.is_cancelled() {
         if let Err(err) = main(
             &cancellation_token,
             client,
             config,
+            &mut next_fire,
             &mut old_stats,
             &stats_cache,
         )
@@ -97,6 +99,7 @@ pub async fn main(
     cancellation_token: &CancellationToken,
     client: &Client,
     config: &Config,
+    next_fire: &mut Instant,
     old_stats: &mut Option<(Stats, HashMap<String, u64>)>,
     stats_cache: &Cache<(), Stats>,
 ) -> anyhow::Result<()> {
@@ -143,6 +146,14 @@ pub async fn main(
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
+
+        *next_fire = Instant::now() + Duration::from_secs(120);
+    } else if Instant::now() > *next_fire {
+        yoink_flag(cancellation_token, client, config).await?;
+
+        *next_fire = Instant::now() + Duration::from_secs(120);
+
+        warn!("its been too long! I must yoink!");
     } else {
         trace!("not yoinking this time");
     }
