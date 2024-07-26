@@ -145,19 +145,19 @@ pub async fn main(
     let active_strategy = strategy::RedShellStrategy;
 
     // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
-    if active_strategy
+    if Instant::now() > *impatient_fire {
+        yoink_flag(cancellation_token, client, config).await?;
+
+        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
+
+        warn!("its been too long! I must yoink!");
+    } else if active_strategy
         .should_yoink(cancellation_token, config, &stats, user_times_diff)
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
 
         *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
-    } else if Instant::now() > *impatient_fire {
-        yoink_flag(cancellation_token, client, config).await?;
-
-        *impatient_fire = Instant::now() + COOLDOWN_TIME * 2;
-
-        warn!("its been too long! I must yoink!");
     } else {
         // TODO: include next_fire in a human readable format
         trace!("not yoinking this time");
