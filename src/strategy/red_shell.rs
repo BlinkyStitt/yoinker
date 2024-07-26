@@ -1,7 +1,6 @@
-use anyhow::Context;
 use im::HashMap;
 use nanorand::Rng;
-use std::{any, cmp::Reverse, time::Duration};
+use std::{cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
