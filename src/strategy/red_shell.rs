@@ -30,14 +30,14 @@ impl YoinkStrategy for RedShellStrategy {
 
         targets.sort_by_key(|(_, &time)| Reverse(time));
 
-        let num_targets = if let Some((_first_id, first_time)) = targets.first() {
-            if **first_time > 30 * 60 {
-                // the first place time is larger than 30 minutes. this means that we haven't yet seen enough time to pass to calculate a diff
-                // target the top 3 players
-                // TODO: this feels fragile. maybe better to have user_times_diff be empty on first run?
+        let num_targets = if let Some((first_id, first_time)) = targets.first() {
+            if Some(first_time) == stats.user_times.get(*first_id).as_ref() {
+                // we haven't had enough time to actually calculate a diff
+                // TODO: is this the best way to check this? I'm not sure. maybe checking if its > 30 minutes is better
                 3
             } else {
                 // we have actual diffs. target the top moving player
+                // TODO: shoot the top 2 instead? I think only if they are close in time. if the first is really far ahead, stay on the first
                 1
             }
         } else {
