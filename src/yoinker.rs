@@ -279,3 +279,36 @@ pub async fn yoink_flag(
 
     Ok(())
 }
+
+pub fn short_jitter() -> Duration {
+    // TODO: percentage of the cooldown time
+
+    let max_short = (COOLDOWN_TIME / 10).as_millis() as u64;
+
+    let ms = nanorand::tls_rng().generate_range(0..=max_short);
+
+    Duration::from_millis(ms)
+}
+
+pub fn long_jitter() -> Duration {
+    let max_long = (COOLDOWN_TIME / 2).as_millis() as u64;
+
+    let ms = nanorand::tls_rng().generate_range(0..=max_long);
+
+    Duration::from_millis(ms)
+}
+
+#[inline]
+pub async fn sleep_short_jitter(cancellation_token: &CancellationToken) {
+    sleep_with_cancel(cancellation_token, short_jitter()).await;
+}
+
+#[inline]
+pub async fn sleep_long_jitter(cancellation_token: &CancellationToken) {
+    sleep_with_cancel(cancellation_token, long_jitter()).await;
+}
+
+#[inline]
+pub async fn sleep_cooldown_jitter(cancellation_token: &CancellationToken) {
+    sleep_with_cancel(cancellation_token, COOLDOWN_TIME + short_jitter()).await;
+}
