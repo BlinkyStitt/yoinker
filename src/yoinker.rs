@@ -280,6 +280,7 @@ pub async fn yoink_flag(
     Ok(())
 }
 
+#[tracing::instrument]
 pub fn short_jitter() -> Duration {
     // TODO: percentage of the cooldown time
 
@@ -287,13 +288,18 @@ pub fn short_jitter() -> Duration {
 
     let ms = nanorand::tls_rng().generate_range(0..=max_short);
 
+    info!(ms);
+
     Duration::from_millis(ms)
 }
 
+#[tracing::instrument]
 pub fn long_jitter() -> Duration {
     let max_long = (COOLDOWN_TIME / 2).as_millis() as u64;
 
     let ms = nanorand::tls_rng().generate_range(0..=max_long);
+
+    info!(ms);
 
     Duration::from_millis(ms)
 }

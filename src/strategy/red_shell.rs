@@ -4,7 +4,11 @@ use std::{cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::{sleep_with_cancel, yoinker::Stats, Config};
+use crate::{
+    sleep_with_cancel,
+    yoinker::{sleep_short_jitter, Stats},
+    Config,
+};
 
 use super::YoinkStrategy;
 
@@ -73,23 +77,18 @@ impl YoinkStrategy for RedShellStrategy {
         let our_time = stats.user_times.get(&config.user_id).copied().unwrap_or(0);
         let our_diff = user_times_diff.get(&config.user_id).copied().unwrap_or(0);
 
-        let mut rng = nanorand::tls_rng();
-
         if targets.iter().any(|t| t.id == holder_id) {
-            let wait_ms = rng.generate_range(1_000..=3_000);
-
             info!(
                 holder_id,
                 holder_diff,
                 holder_time,
                 our_diff,
                 our_time,
-                wait_ms,
                 ?targets,
                 "fire!"
             );
 
-            sleep_with_cancel(cancellation_token, Duration::from_millis(wait_ms)).await;
+            sleep_short_jitter(cancellation_token).await;
 
             Ok(true)
         } else {
