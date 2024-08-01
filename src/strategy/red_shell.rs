@@ -1,16 +1,13 @@
+use super::YoinkStrategy;
+use crate::{
+    sleep::{sleep_short_jitter, sleep_with_cancel},
+    stats::Stats,
+    Config,
+};
 use im::HashMap;
-use nanorand::Rng;
 use std::{cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
-
-use crate::{
-    sleep_with_cancel,
-    yoinker::{sleep_short_jitter, Stats},
-    Config,
-};
-
-use super::YoinkStrategy;
 
 /// target the recent top 3 yoinkers.
 pub struct RedShellStrategy;
@@ -23,8 +20,6 @@ impl YoinkStrategy for RedShellStrategy {
         stats: &Stats,
         user_times_diff: &HashMap<String, u64>,
     ) -> anyhow::Result<bool> {
-        // TODO: if we haven't yoinked in 2 minutes, yoink
-
         let mut targets = user_times_diff
             .iter()
             .filter(|(id, _)| {

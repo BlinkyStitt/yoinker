@@ -2,13 +2,13 @@ mod blue_shell;
 mod mostly_nice;
 mod red_shell;
 
+use crate::{stats::Stats, Config};
+use im::HashMap;
+use tokio_util::sync::CancellationToken;
+
 pub use blue_shell::BlueShellStrategy;
 pub use mostly_nice::MostlyNiceStrategy;
 pub use red_shell::RedShellStrategy;
-
-use crate::{yoinker::Stats, Config};
-use im::HashMap;
-use tokio_util::sync::CancellationToken;
 
 /// A strategy for playing the yoink game.
 pub trait YoinkStrategy {

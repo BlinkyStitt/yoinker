@@ -1,5 +1,5 @@
 use super::YoinkStrategy;
-use crate::{sleep_with_cancel, yoinker::Stats, Config};
+use crate::{sleep::sleep_with_cancel, stats::Stats, Config};
 use im::HashMap;
 use nanorand::Rng;
 use std::time::Duration;

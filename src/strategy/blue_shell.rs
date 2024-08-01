@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{sleep_with_cancel, yoinker::Stats, Config};
+use crate::{sleep::sleep_with_cancel, stats::Stats, Config};
 
 use super::YoinkStrategy;
 

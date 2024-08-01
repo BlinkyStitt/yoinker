@@ -1,143 +1,64 @@
 use crate::{
-    sleep_with_cancel,
+    sleep::sleep_with_cancel,
     strategy::{self, YoinkStrategy},
-    Config,
+    Config, State, COOLDOWN_TIME,
 };
 use anyhow::Context;
-use im::HashMap;
-use moka::future::Cache;
-use nanorand::Rng;
 use reqwest::Client;
-use serde::Deserialize;
 use serde_json::json;
-use std::{fmt::Debug, ops::SubAssign};
-use std::{hash::Hash, time::Instant};
-use tokio::time::{sleep, Duration};
+use std::fmt::Debug;
+use std::time::Instant;
+use tokio::{
+    sync::mpsc,
+    time::{sleep, Duration},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 use url::Url;
 
-/// TODO: this might change! we should get this from stats or something like that. maybe just wait 1 second and then let a rate limit on the next run give us the exact timing
-const COOLDOWN_TIME: Duration = Duration::from_secs(10 * 60);
-
-/// Information about the current flag holder.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct StatsFlag {
-    // TODO: `yoinked_at` is a String in one place but a u64 in another. need a custom deserializer
-    // pub yoinked_at: String,
-    pub holder_id: String,
-    pub holder_name: String,
-    pub holder_platform: String,
-}
-
-/// Information about the current state of the game. Updated every 30 minutes.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct Stats {
-    pub flag: StatsFlag,
-    // pub yoinks: u64,
-    // pub user_yoinks: HashMap<String, u64>,
-    pub user_times: HashMap<String, u64>,
-    pub users: HashMap<String, String>,
-}
-
-/// Rruns the yoink bot until cancelled.
-pub async fn main_loop(
+/// Runs the yoink bot until cancelled.
+pub async fn main_loop<const N: usize>(
+    mut app_state_rx: mpsc::UnboundedReceiver<State<N>>,
     cancellation_token: CancellationToken,
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
-    // stats update every 30 minutes, but we don't know where in the refresh window we are. so only cache for 5 minutes
-    let stats_cache: Cache<(), Stats> = Cache::builder()
-        .max_capacity(1)
-        .time_to_live(Duration::from_secs(5 * 60))
-        .build();
-
-    let mut old_stats = None;
     let mut impatient_fire = Instant::now() + COOLDOWN_TIME / 2;
 
     while !cancellation_token.is_cancelled() {
-        if let Err(err) = main(
-            &cancellation_token,
-            client,
-            config,
-            &mut impatient_fire,
-            &mut old_stats,
-            &stats_cache,
-        )
-        .await
-        {
-            warn!(?err, "yoinker main failed");
-            sleep(Duration::from_secs(1)).await;
-        };
+        while let Some(state) = app_state_rx.recv().await {
+            if let Err(err) = main(
+                state,
+                &cancellation_token,
+                client,
+                config,
+                &mut impatient_fire,
+            )
+            .await
+            {
+                warn!(?err, "yoinker main failed");
+            };
+        }
     }
 
     Ok(())
 }
 
-/// helper function to subtract two hashmaps and return the diference.
-fn subtract_hashmaps<K, V>(newer: &HashMap<K, V>, older: &HashMap<K, V>) -> HashMap<K, V>
-where
-    K: Clone + Debug + Hash + PartialEq + Eq,
-    V: Copy + Clone + SubAssign + PartialOrd<u64>,
-{
-    let mut result = newer.clone();
-
-    for (key, older_value) in older {
-        if let Some(new_value) = result.get_mut(key) {
-            *new_value -= *older_value;
-        } else {
-            warn!(?key, "missing key!")
-        }
-    }
-
-    result.retain(|_, &v| v > 0);
-
-    result
-}
-
 /// The main logic for the yoink bot.
-pub async fn main(
+/// TODO: instead of watching app_state_rx, maybe this should watch a channel that is updated by strategies? then blue shell and impatient can both be strategies?
+pub async fn main<const N: usize>(
+    state: State<N>,
     cancellation_token: &CancellationToken,
     client: &Client,
     config: &Config,
     impatient_fire: &mut Instant,
-    old_stats: &mut Option<(Stats, HashMap<String, u64>)>,
-    stats_cache: &Cache<(), Stats>,
 ) -> anyhow::Result<()> {
-    let mut rng = nanorand::tls_rng();
-
-    let stats = current_stats(stats_cache, client)
-        .await
-        .context("getting current stats")?;
-
-    if let Some((old_stats, new_diff)) = old_stats {
-        if old_stats.user_times != stats.user_times {
-            // the stats have changed. update the old stats
-            *new_diff = subtract_hashmaps(&stats.user_times, &old_stats.user_times);
-
-            *old_stats = stats.clone();
-
-            info!(?new_diff, "user stats changed");
-        }
-    } else {
-        // this is the first time we've gotten stats. set the old stats
-        info!("first time getting stats");
-
-        *old_stats = Some((stats.clone(), stats.user_times.clone()));
-    }
-
-    let user_times_diff = &old_stats.as_ref().unwrap().1;
+    let stats = state.stats.back().context("no stats")?;
+    let user_times_diff = &state.diff;
 
     if stats.flag.holder_id == config.user_id {
         // we already have the flag. no need to do anything. don't waste our cooldown timer!
         debug!("we have the flag");
-
-        // we don't have to sleep here, but i think it makes sense to. we don't want to DOS the current flag holder check. need a websocket!
-        let x = rng.generate_range(1_000..5_000);
-        sleep_with_cancel(cancellation_token, Duration::from_millis(x)).await;
-
         return Ok(());
     }
 
@@ -151,9 +72,10 @@ pub async fn main(
 
         // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
 
+        // TODO: random amount here?
         *impatient_fire = Instant::now() + COOLDOWN_TIME;
     } else if active_strategy
-        .should_yoink(cancellation_token, config, &stats, user_times_diff)
+        .should_yoink(cancellation_token, config, stats, user_times_diff)
         .await?
     {
         yoink_flag(cancellation_token, client, config).await?;
@@ -167,38 +89,6 @@ pub async fn main(
     }
 
     Ok(())
-}
-
-/// The current state of the game (with some caching). Parts of this only update every 30 minutes.
-pub async fn current_stats(cache: &Cache<(), Stats>, client: &Client) -> anyhow::Result<Stats> {
-    let client = client.clone();
-
-    // TODO: put stats in a cache. they only refresh every 30 minutes. we set our timer to 10 minutes though just so that if things don't line up we aren't too stale
-    let mut stats = cache
-        .try_get_with(
-            (),
-            client
-                .get("https://yoink.terminally.online/api/stats")
-                .send()
-                .await?
-                .error_for_status()?
-                .json::<Stats>(),
-        )
-        .await
-        .with_context(|| "failed fetching stats")?;
-
-    // get the current flag holder
-    let flag = client
-        .get("https://yoink.terminally.online/api/flag")
-        .send()
-        .await?
-        .json::<StatsFlag>()
-        .await?;
-
-    // override the stats' old info with the current info
-    stats.flag = flag;
-
-    Ok(stats)
 }
 
 /// Use [Neynar's](https://neynar.com/) API to yoink the flag.
@@ -246,6 +136,7 @@ pub async fn yoink_flag(
         if let Some((_, until)) = response.image.query_pairs().find(|(k, _)| k == "date") {
             let now_ms = chrono::Utc::now().timestamp_millis();
 
+            // TODO: i don't think this is right. i think the ratelimit is always just giving us the current time
             let last_yoinked_ms = until.parse::<i64>().context("parsing rate limit date")?;
 
             // TODO: get the rate limit time from stats or similar
@@ -278,43 +169,4 @@ pub async fn yoink_flag(
     sleep_with_cancel(cancellation_token, duration).await;
 
     Ok(())
-}
-
-#[tracing::instrument]
-pub fn short_jitter() -> Duration {
-    // TODO: percentage of the cooldown time
-
-    let max_short = (COOLDOWN_TIME / 10).as_millis() as u64;
-
-    let ms = nanorand::tls_rng().generate_range(0..=max_short);
-
-    info!(ms);
-
-    Duration::from_millis(ms)
-}
-
-#[tracing::instrument]
-pub fn long_jitter() -> Duration {
-    let max_long = (COOLDOWN_TIME / 2).as_millis() as u64;
-
-    let ms = nanorand::tls_rng().generate_range(0..=max_long);
-
-    info!(ms);
-
-    Duration::from_millis(ms)
-}
-
-#[inline]
-pub async fn sleep_short_jitter(cancellation_token: &CancellationToken) {
-    sleep_with_cancel(cancellation_token, short_jitter()).await;
-}
-
-#[inline]
-pub async fn sleep_long_jitter(cancellation_token: &CancellationToken) {
-    sleep_with_cancel(cancellation_token, long_jitter()).await;
-}
-
-#[inline]
-pub async fn sleep_cooldown_jitter(cancellation_token: &CancellationToken) {
-    sleep_with_cancel(cancellation_token, COOLDOWN_TIME + short_jitter()).await;
 }
