@@ -23,7 +23,7 @@ pub async fn main_loop<const N: usize>(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
-    let mut impatient_fire = Instant::now() + COOLDOWN_TIME / 2;
+    let mut impatient_fire = Instant::now() + COOLDOWN_TIME + COOLDOWN_TIME;
 
     while !cancellation_token.is_cancelled() {
         while let Some(state) = app_state_rx.recv().await {
@@ -137,6 +137,7 @@ pub async fn yoink_flag(
             let now_ms = chrono::Utc::now().timestamp_millis();
 
             // TODO: i don't think this is right. i think the ratelimit is always just giving us the current time
+            // TODO: we also want to mark that we still need to yoink! we need some way to remember to try again
             let last_yoinked_ms = until.parse::<i64>().context("parsing rate limit date")?;
 
             // TODO: get the rate limit time from stats or similar
