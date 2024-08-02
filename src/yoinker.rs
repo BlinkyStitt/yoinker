@@ -1,5 +1,5 @@
 use crate::{
-    sleep::sleep_with_cancel,
+    sleep::{long_jitter, short_jitter, sleep_with_cancel},
     strategy::{self, YoinkStrategy},
     Config, State, COOLDOWN_TIME,
 };
@@ -68,21 +68,22 @@ pub async fn main<const N: usize>(
     // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
     if Instant::now() > *impatient_fire {
         warn!("its been too long! I must yoink!");
-        yoink_flag(cancellation_token, client, config).await?;
-
-        // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
-
-        // TODO: random amount here?
-        *impatient_fire = Instant::now() + COOLDOWN_TIME;
+        if yoink_flag_and_sleep(cancellation_token, client, config).await? {
+            // TODO: think about this more
+            *impatient_fire = Instant::now() + long_jitter();
+        } else {
+            // yoinking failed. we got rate limited somehow. just retry soon
+            *impatient_fire = Instant::now() + short_jitter();
+        }
     } else if active_strategy
         .should_yoink(cancellation_token, config, stats, user_times_diff)
         .await?
     {
-        yoink_flag(cancellation_token, client, config).await?;
+        yoink_flag_and_sleep(cancellation_token, client, config).await?;
 
         // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
 
-        *impatient_fire = Instant::now() + COOLDOWN_TIME;
+        *impatient_fire = Instant::now() + long_jitter();
     } else {
         // TODO: include next_fire in a human readable format
         trace!("not yoinking this time");
@@ -91,12 +92,14 @@ pub async fn main<const N: usize>(
     Ok(())
 }
 
-/// Use [Neynar's](https://neynar.com/) API to yoink the flag.
-pub async fn yoink_flag(
+/// Use [Neynar's](https://neynar.com/) API to yoink the flag. Then sleep for the cooldown period.
+///
+/// TODO: maybe instead of returning a bool, we clear an AtomicBool?
+pub async fn yoink_flag_and_sleep(
     cancellation_token: &CancellationToken,
     client: &Client,
     config: &Config,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     // TODO: re-use this. its the same payload every time
     let payload = json!({
         "action": {
@@ -132,7 +135,7 @@ pub async fn yoink_flag(
     let response = response.json::<Response>().await?;
 
     // inspect the response. the image might be <https://yoink.terminally.online/api/images/ratelimit?date=1721150535550>
-    let duration = if response.image.path() == "/api/images/ratelimit" {
+    let (yoinked, duration) = if response.image.path() == "/api/images/ratelimit" {
         if let Some((_, until)) = response.image.query_pairs().find(|(k, _)| k == "date") {
             let now_ms = chrono::Utc::now().timestamp_millis();
 
@@ -148,7 +151,7 @@ pub async fn yoink_flag(
 
                 warn!(duration_ms, "we've been rate limited");
 
-                Duration::from_millis(duration_ms)
+                (false, Duration::from_millis(duration_ms))
             } else {
                 anyhow::bail!(
                     "rate limit date is in the past. {} should be > {}",
@@ -158,16 +161,16 @@ pub async fn yoink_flag(
             }
         } else {
             warn!(?response, "failed to read rate limit query data");
-            COOLDOWN_TIME
+            (false, COOLDOWN_TIME)
         }
     } else {
         // we've yoinked. the current cooldown timer is 60 seconds. no point in returning before then
         info!(?response, "yoinked!");
 
-        COOLDOWN_TIME
+        (true, COOLDOWN_TIME)
     };
 
     sleep_with_cancel(cancellation_token, duration).await;
 
-    Ok(())
+    Ok(yoinked)
 }

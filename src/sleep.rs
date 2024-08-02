@@ -16,8 +16,6 @@ pub async fn sleep_with_cancel(cancellation_token: &CancellationToken, duration:
 
 #[tracing::instrument]
 pub fn short_jitter() -> Duration {
-    // TODO: percentage of the cooldown time
-
     let max_short = (COOLDOWN_TIME / 10).as_millis() as u64;
 
     let ms = nanorand::tls_rng().generate_range(0..=max_short);
