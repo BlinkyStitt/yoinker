@@ -1,19 +1,16 @@
-use crate::{Config, State};
+use crate::{sleep::sleep_long_jitter, Config, State};
 use anyhow::Context;
 use im::HashMap;
 use moka::future::Cache;
 use reqwest::Client;
 use serde::Deserialize;
 use std::{fmt::Debug, sync::Arc};
-use tokio::{
-    sync::mpsc,
-    time::{sleep, Duration},
-};
+use tokio::{sync::mpsc, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, trace, warn};
 
 /// Information about the current flag holder.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsFlag {
     // TODO: `yoinked_at` is a String in one place but a u64 in another. need a custom deserializer
@@ -24,7 +21,7 @@ pub struct StatsFlag {
 }
 
 /// Information about the current state of the game. Updated every 30 minutes.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub flag: StatsFlag,
@@ -54,22 +51,23 @@ pub async fn stats_loop<const N: usize>(
         if let Err(err) = stats_to_state(&mut app_state, &app_state_tx, &client, &stats_cache).await
         {
             warn!(?err, "stats_to_state failure");
-            sleep(Duration::from_millis(500)).await;
+
+            // TODO: different sleep depending on the error code
+            sleep_long_jitter(&cancellation_token).await;
         };
     }
 
     Ok(())
 }
 
+/// TODO: terrors instead of anyhow!
 pub async fn stats_to_state<const N: usize>(
     app_state: &mut State<N>,
     app_state_tx: &mpsc::UnboundedSender<State<N>>,
     client: &Client,
     stats_cache: &Cache<(), Stats>,
 ) -> anyhow::Result<()> {
-    let stats: Stats = fetch_stats(stats_cache, client)
-        .await
-        .context("getting current stats")?;
+    let stats: Stats = fetch_stats(stats_cache, client).await?;
 
     let stats = Arc::new(stats);
 

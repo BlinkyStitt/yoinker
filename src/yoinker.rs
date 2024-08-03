@@ -9,8 +9,9 @@ use serde_json::json;
 use std::fmt::Debug;
 use std::time::Instant;
 use tokio::{
+    select,
     sync::mpsc,
-    time::{sleep, Duration},
+    time::{timeout, Duration},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
@@ -23,22 +24,38 @@ pub async fn main_loop<const N: usize>(
     client: &Client,
     config: &Config,
 ) -> anyhow::Result<()> {
+    // TODO: store this in redis so that we can recover from a restart
     let mut impatient_fire = Instant::now() + COOLDOWN_TIME + COOLDOWN_TIME;
 
-    while !cancellation_token.is_cancelled() {
-        while let Some(state) = app_state_rx.recv().await {
-            if let Err(err) = main(
-                state,
-                &cancellation_token,
-                client,
-                config,
-                &mut impatient_fire,
-            )
-            .await
-            {
-                warn!(?err, "yoinker main failed");
-            };
-        }
+    loop {
+        let state = select! {
+            // TODO: what should this timeout be?
+            x = timeout(Duration::from_secs(3), app_state_rx.recv()) => {
+                match x {
+                    Ok(Some(state)) => state,
+                    Ok(None) => {
+                        break;
+                    }
+                    Err(err) => {
+                        warn!(?err, "app_state_rx timeout");
+                        Default::default()
+                    }
+                }
+            }
+            _ = cancellation_token.cancelled() => break,
+        };
+
+        if let Err(err) = main(
+            state,
+            &cancellation_token,
+            client,
+            config,
+            &mut impatient_fire,
+        )
+        .await
+        {
+            warn!(?err, "yoinker main failed");
+        };
     }
 
     Ok(())
@@ -53,42 +70,46 @@ pub async fn main<const N: usize>(
     config: &Config,
     impatient_fire: &mut Instant,
 ) -> anyhow::Result<()> {
-    let stats = state.stats.back().context("no stats")?;
-    let user_times_diff = &state.diff;
+    if let Some(stats) = state.stats.back() {
+        let user_times_diff = &state.diff;
 
-    if stats.flag.holder_id == config.user_id {
-        // we already have the flag. no need to do anything. don't waste our cooldown timer!
-        debug!("we have the flag");
-        return Ok(());
-    }
+        if stats.flag.holder_id == config.user_id {
+            // we already have the flag. no need to do anything. don't waste our cooldown timer!
+            debug!("we have the flag");
+            return Ok(());
+        }
 
-    // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
-    let active_strategy = strategy::RedShellStrategy;
+        // TODO: randomly pick a strategy to use. change on a randomized interval. where should the chosen strategy be stored?
+        // TODO: if no stats, just loop over COOLDOWN_TIME
+        let active_strategy = strategy::RedShellStrategy;
 
-    // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
-    if Instant::now() > *impatient_fire {
-        warn!("its been too long! I must yoink!");
-        if yoink_flag_and_sleep(cancellation_token, client, config).await? {
-            // TODO: think about this more
+        // TODO: pass next_fire to this function so that it can alter its strategy based on how long we've been waiting
+        if Instant::now() > *impatient_fire {
+            warn!("its been too long! I must yoink!");
+            if yoink_flag_and_sleep(cancellation_token, client, config).await? {
+                // TODO: think about this more
+                *impatient_fire = Instant::now() + long_jitter();
+            } else {
+                // yoinking failed. we got rate limited somehow. just retry soon
+                *impatient_fire = Instant::now() + short_jitter();
+            }
+        } else if active_strategy
+            .should_yoink(cancellation_token, config, stats, user_times_diff)
+            .await?
+        {
+            yoink_flag_and_sleep(cancellation_token, client, config).await?;
+
+            // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
+
             *impatient_fire = Instant::now() + long_jitter();
         } else {
-            // yoinking failed. we got rate limited somehow. just retry soon
-            *impatient_fire = Instant::now() + short_jitter();
+            // TODO: include next_fire in a human readable format
+            trace!("not yoinking this time");
         }
-    } else if active_strategy
-        .should_yoink(cancellation_token, config, stats, user_times_diff)
-        .await?
-    {
-        yoink_flag_and_sleep(cancellation_token, client, config).await?;
-
-        // TODO: save earliest fire time here? we've already slept for the cooldown time so it should be ready. but i'm seeing rate limits
-
-        *impatient_fire = Instant::now() + long_jitter();
     } else {
-        // TODO: include next_fire in a human readable format
-        trace!("not yoinking this time");
+        info!("i have no ~~~mouth~~~ stats and i must ~~~scream~~~ yoink");
+        yoink_flag_and_sleep(cancellation_token, client, config).await?;
     }
-
     Ok(())
 }
 
