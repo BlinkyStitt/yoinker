@@ -1,6 +1,6 @@
 use crate::APP_USER_AGENT;
 use anyhow::Context;
-use im::HashMap;
+use imbl::HashMap;
 use reqwest::Client;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -71,4 +71,27 @@ where
     result.retain(|_, &v| v > 0);
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::subtract_hashmaps;
+    use imbl::HashMap;
+
+    #[test]
+    fn differences_keep_positive_changes_and_preserve_inputs() {
+        let older: HashMap<_, _> = [("growing", 3_u64), ("same", 5)].into_iter().collect();
+        let newer: HashMap<_, _> = [("growing", 8_u64), ("same", 5), ("new", 2)]
+            .into_iter()
+            .collect();
+        let difference = subtract_hashmaps(&newer, &older);
+        assert_eq!(
+            difference,
+            [("growing", 5), ("new", 2)]
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        );
+        assert_eq!(newer["growing"], 8);
+        assert_eq!(older["growing"], 3);
+    }
 }

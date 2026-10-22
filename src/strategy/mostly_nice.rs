@@ -1,6 +1,6 @@
 use super::YoinkStrategy;
 use crate::{sleep::sleep_with_cancel, stats::Stats, Config};
-use im::HashMap;
+use imbl::HashMap;
 use nanorand::Rng;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

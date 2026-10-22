@@ -12,7 +12,7 @@ circular-buffer = "0.1.7"
 dotenvy = "0.15.7"
 envy = "0.4.2"
 futures = "0.3.30"
-im = { version = "15.1.0", features = ["serde"] }
+imbl = { version = "7.0.2", features = ["serde"] }
 moka = { version = "0.12.8", features = ["future"] }
 nanorand = "0.7.0"
 reqwest = { version = "0.12.5", features = ["json"] }
