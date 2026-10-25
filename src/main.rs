@@ -8,7 +8,7 @@ mod yoinker;
 use crate::stats::Stats;
 use crate::utils::subtract_hashmaps;
 use anyhow::Context;
-use circular_buffer::CircularBuffer;
+use circular_buffer::FixedCircularBuffer;
 use imbl::HashMap;
 use serde::Deserialize;
 use std::{env, sync::Arc, time::Duration};
@@ -38,7 +38,7 @@ pub struct Config {
 
 #[derive(Clone, Debug, Default)]
 pub struct State<const N: usize> {
-    stats: CircularBuffer<N, Arc<Stats>>,
+    stats: FixedCircularBuffer<Arc<Stats>, N>,
     diff: HashMap<String, u64>,
 }
 
