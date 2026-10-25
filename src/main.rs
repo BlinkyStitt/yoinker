@@ -8,8 +8,8 @@ mod yoinker;
 use crate::stats::Stats;
 use crate::utils::subtract_hashmaps;
 use anyhow::Context;
-use circular_buffer::CircularBuffer;
-use im::HashMap;
+use circular_buffer::FixedCircularBuffer;
+use imbl::HashMap;
 use serde::Deserialize;
 use std::{env, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
@@ -38,7 +38,7 @@ pub struct Config {
 
 #[derive(Clone, Debug, Default)]
 pub struct State<const N: usize> {
-    stats: CircularBuffer<N, Arc<Stats>>,
+    stats: FixedCircularBuffer<Arc<Stats>, N>,
     diff: HashMap<String, u64>,
 }
 
@@ -142,4 +142,35 @@ async fn main() -> anyhow::Result<()> {
     info!("exited successfully");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{State, Stats};
+    use std::sync::Arc;
+
+    fn stats(time: u64) -> Arc<Stats> {
+        Arc::new(Stats {
+            user_times: [("player".to_owned(), time)].into_iter().collect(),
+            ..Stats::default()
+        })
+    }
+
+    #[test]
+    fn history_rolls_over_and_cloned_states_keep_their_snapshot() {
+        let mut state = State::<2>::default();
+        assert!(state.push_stats(stats(3)));
+        assert_eq!(state.diff["player"], 3);
+        let snapshot = state.clone();
+        assert!(!state.push_stats(stats(3)));
+        assert_eq!(state.stats.len(), 1);
+        assert!(state.push_stats(stats(8)));
+        assert_eq!(state.diff["player"], 5);
+        assert!(state.push_stats(stats(15)));
+        assert_eq!(state.stats.len(), 2);
+        assert_eq!(state.diff["player"], 7);
+        assert_eq!(snapshot.stats.len(), 1);
+        assert_eq!(snapshot.diff["player"], 3);
+        assert_eq!(snapshot.stats.back().unwrap().user_times["player"], 3);
+    }
 }

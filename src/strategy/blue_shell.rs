@@ -1,5 +1,5 @@
 use anyhow::Context;
-use im::HashMap;
+use imbl::HashMap;
 use nanorand::Rng;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

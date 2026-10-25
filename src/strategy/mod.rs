@@ -3,7 +3,7 @@ mod mostly_nice;
 mod red_shell;
 
 use crate::{stats::Stats, Config};
-use im::HashMap;
+use imbl::HashMap;
 use tokio_util::sync::CancellationToken;
 
 pub use blue_shell::BlueShellStrategy;

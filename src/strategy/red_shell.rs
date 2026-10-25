@@ -4,7 +4,7 @@ use crate::{
     stats::Stats,
     Config,
 };
-use im::HashMap;
+use imbl::HashMap;
 use std::{cmp::Reverse, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};

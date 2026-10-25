@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Locked tests and Clippy (2 GiB)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922
+      options: --memory=2g --memory-swap=2g --cpus=2 --pids-limit=512
+    env:
+      CARGO_BUILD_JOBS: 1
+      RUST_TEST_THREADS: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the project toolchain
+        run: |
+          project_toolchain=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
+          test -n "$project_toolchain"
+          rustup toolchain install "$project_toolchain" --profile minimal --component clippy
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets

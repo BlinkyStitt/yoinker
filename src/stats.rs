@@ -1,6 +1,6 @@
 use crate::{sleep::sleep_long_jitter, Config, State};
 use anyhow::Context;
-use im::HashMap;
+use imbl::HashMap;
 use moka::future::Cache;
 use reqwest::Client;
 use serde::Deserialize;
